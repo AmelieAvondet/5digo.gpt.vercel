@@ -48,7 +48,7 @@ export default function ChatPage() {
         } else {
             // Temas por defecto
             setTopics([
-                { id: 1, title: 'Fundamentos de JavaScript' },
+                { id: 1, title: 'Fundamentos de Java' },
                 { id: 2, title: 'React Basics' },
                 { id: 3, title: 'TypeScript Intro' },
             ]);

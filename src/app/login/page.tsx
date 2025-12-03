@@ -32,8 +32,12 @@ export default function LoginPage() {
         return;
       }
 
-      // Login exitoso
-      router.push('/chat');
+      // Login exitoso - redirigir según rol
+      if (result.role === 'profesor') {
+        router.push('/admin/courses');
+      } else {
+        router.push('/courses');
+      }
     } catch (err: any) {
       setError('Error al conectarse al servidor');
       setLoading(false);
@@ -44,7 +48,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="w-full max-w-md">
         <div className="bg-white rounded-lg shadow-lg p-8">
-          <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">Tutor IA</h1>
+          <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">🎓 Tutor IA</h1>
           <p className="text-center text-gray-600 mb-6">Inicia sesión para comenzar</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -100,13 +104,6 @@ export default function LoginPage() {
                 Regístrate aquí
               </Link>
             </p>
-          </div>
-
-          {/* Datos de prueba para demo */}
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg text-xs text-gray-600">
-            <p className="font-semibold mb-1">Datos de prueba:</p>
-            <p>Email: test@example.com</p>
-            <p>Contraseña: (cualquiera - primero regístrate)</p>
           </div>
         </div>
       </div>

@@ -10,6 +10,7 @@ export default function RegisterPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [role, setRole] = useState<'alumno' | 'profesor'>('alumno');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
@@ -34,6 +35,7 @@ export default function RegisterPage() {
             const formData = new FormData();
             formData.set('email', email);
             formData.set('password', password);
+            formData.set('role', role);
 
             const result = await registerUser(formData);
 
@@ -43,8 +45,12 @@ export default function RegisterPage() {
                 return;
             }
 
-            // Registro exitoso
-            router.push('/chat');
+            // Registro exitoso - redirigir según rol
+            if (role === 'profesor') {
+                router.push('/admin/courses');
+            } else {
+                router.push('/courses');
+            }
         } catch (err: any) {
             setError('Error al conectarse al servidor');
             setLoading(false);
@@ -55,8 +61,8 @@ export default function RegisterPage() {
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 p-4">
             <div className="w-full max-w-md">
                 <div className="bg-white rounded-lg shadow-lg p-8">
-                    <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">Crear Cuenta</h1>
-                    <p className="text-center text-gray-600 mb-6">Únete a nuestro tutor de IA</p>
+                    <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">Registrarse</h1>
+                    <p className="text-center text-gray-600 mb-6">Crea tu cuenta para comenzar</p>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
@@ -104,6 +110,36 @@ export default function RegisterPage() {
                             />
                         </div>
 
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-3">
+                                ¿Qué eres?
+                            </label>
+                            <div className="space-y-2">
+                                <label className="flex items-center cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="role"
+                                        value="alumno"
+                                        checked={role === 'alumno'}
+                                        onChange={(e) => setRole(e.target.value as 'alumno')}
+                                        className="w-4 h-4 text-green-600"
+                                    />
+                                    <span className="ml-3 text-gray-700">👨‍🎓 Alumno</span>
+                                </label>
+                                <label className="flex items-center cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="role"
+                                        value="profesor"
+                                        checked={role === 'profesor'}
+                                        onChange={(e) => setRole(e.target.value as 'profesor')}
+                                        className="w-4 h-4 text-green-600"
+                                    />
+                                    <span className="ml-3 text-gray-700">👨‍🏫 Profesor</span>
+                                </label>
+                            </div>
+                        </div>
+
                         {error && (
                             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                                 {error}
@@ -115,7 +151,7 @@ export default function RegisterPage() {
                             disabled={loading}
                             className="w-full py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-400 transition-colors"
                         >
-                            {loading ? 'Registrando...' : 'Registrarse'}
+                            {loading ? 'Registrando...' : 'Crear Cuenta'}
                         </button>
                     </form>
 
@@ -123,7 +159,7 @@ export default function RegisterPage() {
                         <p className="text-center text-gray-600 text-sm">
                             ¿Ya tienes cuenta?{' '}
                             <Link href="/login" className="text-green-600 hover:text-green-700 font-semibold">
-                                Inicia sesión
+                                Inicia sesión aquí
                             </Link>
                         </p>
                     </div>

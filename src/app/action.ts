@@ -1,4 +1,4 @@
-// Archivo: app/action.ts (Usando Server Actions de Next.js)
+// Archivo: app/action.ts
 
 "use server";
 
@@ -13,82 +13,29 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'your-secret-key-min-32-chars-long!!!'
 );
 
-// ========== FUNCIONES DE AUTENTICACIÓN ==========
-
-export async function loginUser(formData: FormData) {
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-
-  if (!email || !password) {
-    return { error: "Email y contraseña son requeridos." };
-  }
-
-  try {
-    console.log(`[AUTH] Intento de login para: ${email}`);
-
-    // 1. Buscar usuario en DB por email
-    const { data: user, error: userError } = await supabaseAdmin
-      .from('users')
-      .select('id, password_hash')
-      .eq('email', email)
-      .single();
-
-    if (userError || !user) {
-      console.log(`[AUTH] Usuario no encontrado: ${email}`);
-      return { error: "Email o contraseña incorrectos." };
-    }
-
-    // 2. Verificar contraseña con bcrypt
-    const passwordValid = await bcrypt.compare(password, user.password_hash);
-    if (!passwordValid) {
-      console.log(`[AUTH] Contraseña incorrecta para: ${email}`);
-      return { error: "Email o contraseña incorrectos." };
-    }
-
-    // 3. Crear JWT
-    console.log(`[AUTH] Creando JWT para usuario: ${user.id}`);
-    const token = await new SignJWT({ userId: user.id, email })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setExpirationTime('7d')
-      .sign(JWT_SECRET);
-
-    // 4. Guardar JWT en cookie HTTP-Only
-    const cookieStore = await cookies();
-    cookieStore.set('auth_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60, // 7 días
-      path: '/',
-    });
-
-    console.log(`[AUTH] Login exitoso para: ${email}`);
-    return { success: true, userId: user.id };
-
-  } catch (e: any) {
-    console.error(`[AUTH] Error en login:`, e.message);
-    return { error: e.message || "Error al realizar login." };
-  }
-}
-
 export async function registerUser(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
+  const role = (formData.get("role") as string) || 'alumno';
 
   if (!email || !password) {
     return { error: "Faltan email o contraseña." };
   }
 
   try {
-    console.log(`[AUTH] Registrando nuevo usuario: ${email}`);
+    console.log(`[AUTH] Registrando nuevo usuario: ${email}, role: ${role}`);
 
     // 1. Hashear la contraseña
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-    // 2. Insertar usuario en DB (Supabase/PostgreSQL)
+    // 2. Insertar usuario en DB con rol especificado
     const { data, error } = await supabaseAdmin
       .from('users')
-      .insert([{ email, password_hash: hashedPassword }])
+      .insert([{ 
+        email, 
+        password_hash: hashedPassword,
+        role: role
+      }])
       .select('id')
       .single();
 
@@ -97,7 +44,7 @@ export async function registerUser(formData: FormData) {
     console.log(`[AUTH] Usuario registrado con ID: ${data.id}`);
 
     // 3. Crear JWT automáticamente después del registro
-    const token = await new SignJWT({ userId: data.id, email })
+    const token = await new SignJWT({ userId: data.id, email, role })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime('7d')
       .sign(JWT_SECRET);
@@ -113,14 +60,69 @@ export async function registerUser(formData: FormData) {
     });
 
     console.log(`[AUTH] Registro exitoso y JWT creado para: ${email}`);
-    return { success: true, userId: data.id };
+    return { success: true, userId: data.id, role };
 
   } catch (e: any) {
     console.error(`[AUTH] Error en registro:`, e.message);
     if (e.code === '23505') {
-        return { error: "El email ya está registrado." };
+      return { error: "El email ya está registrado." };
     }
     return { error: e.message || "Error al registrar usuario." };
+  }
+}
+export async function loginUser(formData: FormData) {
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
+
+  if (!email || !password) {
+    return { error: "Faltan email o contraseña." };
+  }
+
+  try {
+    console.log(`[AUTH] Intento de login para: ${email}`);
+
+    // 1. Buscar usuario en Supabase
+    const { data: userData, error } = await supabaseAdmin
+      .from('users')
+      .select('id, password_hash, role')
+      .eq('email', email)
+      .single();
+
+    if (error || !userData) {
+      console.log(`[AUTH] Usuario no encontrado: ${email}`);
+      return { error: "Credenciales inválidas." };
+    }
+
+    // 2. Comparar la contraseña hasheada
+    const passwordMatch = await bcrypt.compare(password, userData.password_hash);
+
+    if (!passwordMatch) {
+      console.log(`[AUTH] Contraseña incorrecta para: ${email}`);
+      return { error: "Credenciales inválidas." };
+    }
+
+    // 3. Crear JWT (como en registerUser)
+    const token = await new SignJWT({ userId: userData.id, email, role: userData.role })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setExpirationTime('7d')
+      .sign(JWT_SECRET);
+
+    // 4. Guardar JWT en cookie HTTP-Only
+    const cookieStore = await cookies();
+    cookieStore.set('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60,
+      path: '/',
+    });
+
+    console.log(`[AUTH] Login exitoso para: ${email}`);
+    return { success: true, userId: userData.id, role: userData.role };
+
+  } catch (e: any) {
+    console.error(`[AUTH] Error en login:`, e.message);
+    return { error: e.message || "Error al iniciar sesión." };
   }
 }
 

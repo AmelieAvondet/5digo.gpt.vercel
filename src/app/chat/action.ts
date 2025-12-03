@@ -12,6 +12,9 @@ import { jwtVerify } from 'jose';
 // La clase GoogleGenAI busca automáticamente la variable de entorno GEMINI_API_KEY
 const ai = new GoogleGenAI({});
 
+// Prompt interno para forzar el inicio de la clase
+const INTERNAL_START_PROMPT = "Por favor, inicia la clase con la explicación completa del subtema actual (el primero sin el estado 'COMPLETADO' en el PROGRESO).";
+
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'your-secret-key-min-32-chars-long!!!'
 );
@@ -41,7 +44,7 @@ async function getUserIdFromToken(): Promise<string | null> {
   }
 }
 
-export async function chatWithAI(topicId: number, newMessage: string) {
+export async function chatWithAI(newMessage: string, cursoId: number) {
   try {
     // 1. Obtener userId del JWT
     const userId = await getUserIdFromToken();
@@ -49,103 +52,138 @@ export async function chatWithAI(topicId: number, newMessage: string) {
       return { error: "No estás autenticado. Por favor inicia sesión." };
     }
 
-    console.log(`[CHAT] Iniciando chatWithAI: userId=${userId}, topicId=${topicId}`);
+    console.log(`[CHAT] Iniciando chatWithAI: userId=${userId}, cursoId=${cursoId}`);
 
-    // 2. Obtener la sesión actual del usuario y el temario
-    const { data: currentSession, error: sessionError } = await supabaseAdmin
+    let actualMessageToSend = newMessage; // Por defecto, es el mensaje del alumno
+
+    // 2. Obtener la sesión (context_data) del curso
+    const { data: sessionData, error: sessionError } = await supabaseAdmin
       .from('chat_sessions')
       .select('id, context_data')
       .eq('user_id', userId)
-      .eq('topic_id', topicId)
-      .single();
+      .eq('course_id', cursoId)
+      .maybeSingle();
 
-    console.log(`[CHAT] Búsqueda de sesión:`, { sessionError, currentSession });
+    console.log(`[CHAT] Búsqueda de sesión:`, { sessionError, hasSession: !!sessionData });
 
-    let session = currentSession;
+    // 3. Determinar si es una sesión nueva
+    // Es nueva si no hay datos O si el historial está vacío.
+    const isNewSession = !sessionData || !sessionData.context_data || sessionData.context_data.length === 0;
 
-    // Si no existe la sesión, crearla
-    if (sessionError) {
-      console.log(`[DEBUG] Sesión no encontrada, creando nueva sesión...`);
+    if (isNewSession) {
+      // 4. ¡Punto clave! Si la sesión es nueva, ignoramos el saludo del alumno 
+      // y forzamos la instrucción de inicio para la IA.
+      actualMessageToSend = INTERNAL_START_PROMPT;
+      console.log(`[CHAT] Sesión nueva detectada. Usando INTERNAL_START_PROMPT`);
+    } else {
+      console.log(`[CHAT] Sesión existente. Usando mensaje del alumno.`);
+    }
+
+    // 5. Si no existe sesión, crearla
+    let session = sessionData;
+    if (!sessionData) {
+      console.log(`[DEBUG] Sesión no encontrada, creando nueva...`);
       const { data: newSession, error: createError } = await supabaseAdmin
         .from('chat_sessions')
         .insert([{
           user_id: userId,
-          topic_id: topicId,
+          course_id: cursoId,
           context_data: []
         }])
         .select('id, context_data')
         .single();
-
-      console.log(`[DEBUG] Intento de crear sesión:`, { createError, newSession });
 
       if (createError) {
         console.error(`[ERROR] Error al crear sesión:`, createError);
         return { error: `Error al crear sesión: ${createError.message}` };
       }
       session = newSession;
+      console.log(`[DEBUG] Sesión creada exitosamente`);
     }
 
     if (!session) {
       return { error: "No se pudo obtener o crear la sesión de chat." };
     }
 
-    // 2. Obtener el contenido del temario
-    const { data: topic, error: topicError } = await supabaseAdmin
-      .from('topics')
-      .select('content')
-      .eq('id', topicId)
+    // 6. Obtener el contenido del curso para el System Prompt
+    const { data: course, error: courseError } = await supabaseAdmin
+      .from('courses')
+      .select('name, description')
+      .eq('id', cursoId)
       .single();
 
-    console.log(`[DEBUG] Búsqueda de tema:`, { topicError, topic: topic ? "found" : "not found" });
-
-    if (topicError || !topic) {
-      console.error(`[ERROR] Error al obtener tema:`, topicError);
-      return { error: `Error al obtener el temario: ${topicError?.message || 'No encontrado'}` };
+    if (courseError || !course) {
+      console.error(`[ERROR] Error al obtener curso:`, courseError);
+      return { error: `Error al obtener el curso: ${courseError?.message || 'No encontrado'}` };
     }
 
-    const topicContent = topic.content;
-    console.log(`[DEBUG] Contenido del tema obtenido`);
+    console.log(`[DEBUG] Curso obtenido: ${course.name}`);
 
-    // ********** Lógica de Llamada a la IA (Modificada) **********
+    // 7. Construir el System Prompt con el protocolo estricto de Tutor IA
+    const systemPrompt = `Eres "Tutor IA", un asistente educativo experto, sumamente paciente y CRÍTICAMENTE ESTRICTO CON EL PROTOCOLO DE CLASE Y LA SALIDA JSON.
 
-    // 3. Construir el historial y el System Prompt
-    // El System Prompt de Gemini se pasa como una opción separada, no como un mensaje 'system' en el historial.
+Tu objetivo fundamental es guiar al alumno paso a paso a través del Temario, asegurando la comprensión antes de avanzar.
 
-    const systemPrompt = `Eres un tutor experto en ${topicContent}. 
-                          Tu objetivo es guiar al alumno a través del temario, responder sus dudas
-                          y evaluar su progreso.`;
+[ROL Y PERSONALIDAD IMPERATIVA]
+1. Modo de Operación: Estás en modo de Tutoría Dirigida.
+2. Tono: Profesional, motivador. Siempre responde en español.
+3. Prioridad Máxima: Las reglas de Clase y Evaluación tienen prioridad sobre cualquier pregunta que no esté relacionada con el subtema actual.
 
-    // Mapear el historial guardado (que usa 'user' y 'assistant') a la estructura Content de Gemini ('user' y 'model')
+[CURSO]
+Nombre: "${course.name}"
+Descripción: "${course.description}"
+
+[REGLAS DE CLASE Y CONVERSACIÓN ESTRICTAS]
+1. INICIO DE TEMA (Clase): Si es la primera interacción o el alumno no ha completado el subtema, INICIA con una Explicación Detallada del tema, seguida de un ejemplo práctico.
+2. EVALUACIÓN (Tarea): Inmediatamente después de la explicación, genera UNA TAREA con 2-3 preguntas o ejercicios para evaluar comprensión.
+3. RECONDUCCIÓN (Anti-Q&A): Si el alumno hace una pregunta que NO es la tarea actual, IGNORA la pregunta directa. Responde recordándole la Tarea Pendiente o el concepto actual. NO AVANCES hasta que evalúes la tarea.
+4. VALIDACIÓN: Si el alumno responde la tarea correctamente, celebra el logro y marca como completado. Si responde incorrectamente, proporciona retroalimentación constructiva y pide que lo intente de nuevo.
+
+[PROTOCOLO DE JSON DE ACCIÓN]
+El JSON DEBE ser el ÚLTIMO elemento de tu respuesta. Estructura exacta:
+{"action": "update_progress", "subtopic_id": "[ID]", "status": "COMPLETADO"}
+
+USAR SOLO cuando:
+- El alumno responde correctamente la tarea
+- El alumno demuestra comprensión del tema
+
+CUANDO NO USAR JSON:
+- En explicaciones iniciales
+- Cuando generas la tarea
+- Cuando el alumno responde incorrectamente
+- Cuando haces reconducción`;
+
+    // 8. Mapear el historial guardado a la estructura de Gemini
     const mappedContext: Content[] = (session.context_data || []).map((msg: any) => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }]
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
     }));
 
-    // Agregar el nuevo mensaje del alumno
+    // 9. Agregar el mensaje actual (que ahora es el mensaje forzado o el mensaje del alumno real)
     const userMessagePart: Content = {
-        role: 'user',
-        parts: [{ text: newMessage }],
+      role: 'user',
+      parts: [{ text: actualMessageToSend }],
     };
     const messagesToSend: Content[] = [...mappedContext, userMessagePart];
 
-    console.log(`[DEBUG] Enviando ${messagesToSend.length} mensajes a Gemini`);
+    console.log(`[DEBUG] Enviando ${messagesToSend.length} mensajes a Gemini. isNewSession=${isNewSession}`);
 
-    // 4. Llamada a la API de la IA (Gemini)
+    // 10. Llamada a la API de Gemini
     const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash", // Modelo rápido para hackathon
-        contents: messagesToSend,
-        systemInstruction: systemPrompt,
+      model: "gemini-2.0-flash",
+      contents: messagesToSend,
+      systemInstruction: systemPrompt,
     } as any);
 
-    const aiResponse = response.text || "Lo siento, no pude procesar tu solicitud con Gemini.";
+    const aiResponse = response.text || "Lo siento, no pude procesar tu solicitud.";
     console.log(`[DEBUG] Respuesta recibida de Gemini (${aiResponse.length} caracteres)`);
 
-    // 5. Actualizar el contexto en la DB
-    // NOTA: Asegúrate de guardar los mensajes en el formato que usará tu UI (probablemente 'user'/'assistant')
+    // 11. Actualizar el contexto en la DB
+    // Guardar el mensaje REAL del alumno (no el INTERNAL_START_PROMPT)
     const newContext: ConversationMessage[] = [
-        ...(session.context_data || []),
-        { role: 'user', content: newMessage },
-        { role: 'assistant', content: aiResponse }, // Usar 'assistant' para guardar en DB/mostrar en UI
+      ...(session.context_data || []),
+      { role: 'user', content: newMessage }, // Siempre guardar el mensaje REAL del alumno
+      { role: 'assistant', content: aiResponse },
     ];
 
     console.log(`[DEBUG] Actualizando sesión con ${newContext.length} mensajes`);
@@ -163,10 +201,13 @@ export async function chatWithAI(topicId: number, newMessage: string) {
 
     console.log(`[DEBUG] Sesión actualizada exitosamente`);
 
-    // 6. Devolver la respuesta de la IA
-    return { response: aiResponse, fullContext: newContext };
+    // 12. Devolver la respuesta de la IA
+    return { response: aiResponse, fullContext: newContext, isNewSession };
   } catch (error: any) {
     console.error(`[ERROR] Excepción en chatWithAI:`, error);
+    return { error: `Error interno: ${error.message}` };
+  }
+}
     return { error: error.message || "Error al procesar el mensaje.", response: undefined, fullContext: [] };
   }
 }
