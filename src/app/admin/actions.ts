@@ -89,10 +89,18 @@ export async function getCourseDetails(courseId: string) {
 
     if (topicsError) throw topicsError;
 
-    // Obtener alumnos inscritos
+    // Obtener alumnos inscritos con su información de usuario
     const { data: enrollments, error: enrollmentsError } = await supabaseAdmin
       .from('course_enrollments')
-      .select('*')
+      .select(`
+        id,
+        student_id,
+        progress,
+        created_at,
+        users:student_id (
+          email
+        )
+      `)
       .eq('course_id', courseId);
 
     if (enrollmentsError) throw enrollmentsError;

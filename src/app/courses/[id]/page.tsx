@@ -219,9 +219,12 @@ export default function StudentCourseDetailsPage() {
                       </div>
                     </div>
                     {topic.activities && (
-                      <p className="text-xs text-gray-500 mt-2">
-                        📝 Incluye actividades
-                      </p>
+                      <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
+                        <p className="text-xs font-semibold text-blue-900 mb-1">📝 Actividades incluidas:</p>
+                        <p className="text-xs text-blue-800 line-clamp-2">
+                          {topic.activities}
+                        </p>
+                      </div>
                     )}
                   </Link>
                 );

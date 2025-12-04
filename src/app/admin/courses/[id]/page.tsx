@@ -18,6 +18,10 @@ interface Enrollment {
   id: string;
   student_id: string;
   progress: number;
+  created_at?: string;
+  users?: {
+    email: string;
+  } | null;
 }
 
 export default function CourseDetailsPage() {
@@ -173,15 +177,26 @@ export default function CourseDetailsPage() {
               {enrollments.map((enrollment) => (
                 <div
                   key={enrollment.id}
-                  className="border border-gray-200 rounded-lg p-4"
+                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition"
                 >
-                  <div className="flex justify-between items-start mb-3">
-                    <span className="font-semibold text-gray-900">ID: {enrollment.student_id.slice(0, 8)}...</span>
-                    <span className="text-sm text-gray-600">{enrollment.progress || 0}% completado</span>
+                  <div className="mb-3">
+                    {enrollment.users?.email ? (
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-lg">👤</span>
+                        <span className="font-semibold text-gray-900 break-all">{enrollment.users.email}</span>
+                      </div>
+                    ) : (
+                      <span className="font-semibold text-gray-900">ID: {enrollment.student_id.slice(0, 8)}...</span>
+                    )}
+                    <span className="text-xs text-gray-500 block">ID: {enrollment.student_id.slice(0, 16)}...</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-gray-700">Progreso</span>
+                    <span className="text-sm font-semibold text-gray-900">{enrollment.progress || 0}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
                     <div
-                      className="bg-green-600 h-2 rounded-full transition"
+                      className="bg-green-600 h-2.5 rounded-full transition-all duration-300"
                       style={{ width: `${enrollment.progress || 0}%` }}
                     ></div>
                   </div>

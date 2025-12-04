@@ -307,6 +307,17 @@ export async function getTopicDetails(courseId: string, topicId: string) {
       return { error: 'Temario no encontrado' };
     }
 
+    // Obtener el estado del tema desde student_syllabus
+    const { data: syllabusEntry } = await supabaseAdmin
+      .from('student_syllabus')
+      .select('status')
+      .eq('student_id', studentId)
+      .eq('course_id', courseId)
+      .eq('topic_id', topicId)
+      .single();
+
+    const topicStatus = syllabusEntry?.status || 'in_progress';
+
     // Obtener o crear sesión de chat
     const { data: chatSession, error: chatError } = await supabaseAdmin
       .from('chat_sessions')
@@ -347,6 +358,7 @@ export async function getTopicDetails(courseId: string, topicId: string) {
       },
       sessionId,
       chatHistory: chatSession?.context_data ? JSON.parse(chatSession.context_data) : [],
+      topicStatus,
     };
   } catch (error) {
     console.error('Error en getTopicDetails:', error);
@@ -535,7 +547,59 @@ CUANDO NO USAR JSON:
 }
 
 
-// Actualizar progreso del estudiante
+// Actualizar estado de un tema específico
+export async function updateTopicStatus(
+  courseId: string,
+  topicId: string,
+  status: 'pending' | 'in_progress' | 'completed'
+) {
+  try {
+    const studentId = await getUserIdFromToken();
+    if (!studentId) {
+      return { error: 'No estás autenticado' };
+    }
+
+    // Actualizar estado del tema en student_syllabus
+    const { error: updateError } = await supabaseAdmin
+      .from('student_syllabus')
+      .update({ status })
+      .eq('student_id', studentId)
+      .eq('course_id', courseId)
+      .eq('topic_id', topicId);
+
+    if (updateError) {
+      console.error('Error al actualizar estado del tema:', updateError);
+      return { error: 'Error al actualizar estado del tema' };
+    }
+
+    // Calcular y actualizar progreso general del curso
+    const { data: syllabusData } = await supabaseAdmin
+      .from('student_syllabus')
+      .select('status')
+      .eq('student_id', studentId)
+      .eq('course_id', courseId);
+
+    if (syllabusData) {
+      const totalTopics = syllabusData.length;
+      const completedTopics = syllabusData.filter(t => t.status === 'completed').length;
+      const progress = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
+
+      // Actualizar progreso en course_enrollments
+      await supabaseAdmin
+        .from('course_enrollments')
+        .update({ progress })
+        .eq('student_id', studentId)
+        .eq('course_id', courseId);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error en updateTopicStatus:', error);
+    return { error: 'Error al procesar tu solicitud' };
+  }
+}
+
+// Actualizar progreso del estudiante (deprecated - usar updateTopicStatus)
 export async function updateStudentProgress(courseId: string, progress: number) {
   try {
     const studentId = await getUserIdFromToken();

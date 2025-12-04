@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getTopicDetails, saveChatMessage, generateAIResponse, updateStudentProgress } from '@/app/student/actions';
+import { getTopicDetails, saveChatMessage, generateAIResponse, updateTopicStatus } from '@/app/student/actions';
 import AdminHeader from '@/components/AdminHeader';
 
 interface Topic {
@@ -67,6 +67,15 @@ export default function TopicChatPage() {
         setTopic(result.topic);
         setSessionId(result.sessionId);
         setChatHistory(result.chatHistory || []);
+
+        // Establecer el estado inicial del tema desde la BD
+        if (result.topicStatus === 'completed') {
+          setCompletionStatus('completed');
+        } else if (result.topicStatus === 'pending') {
+          setCompletionStatus('in_progress');
+        } else {
+          setCompletionStatus('in_progress');
+        }
       }
 
       setLoading(false);
@@ -128,8 +137,8 @@ export default function TopicChatPage() {
           if (action) {
             if (action.action === 'complete_topic') {
               setCompletionStatus('completed');
-              // Actualizar progreso en la BD
-              await updateStudentProgress(courseId, 100);
+              // Actualizar estado del tema en la BD
+              await updateTopicStatus(courseId, topicId, 'completed');
             } else if (action.action === 'task_generated') {
               setCompletionStatus('task_pending');
             }
