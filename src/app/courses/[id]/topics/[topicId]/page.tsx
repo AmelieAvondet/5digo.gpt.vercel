@@ -108,9 +108,7 @@ export default function TopicChatPage() {
         { courseId }
       );
 
-      if (aiResult.error) {
-        setError(aiResult.error);
-      } else if (aiResult.response) {
+      if (aiResult.response) {
         const assistantMsg: ChatMessage = {
           role: 'assistant',
           content: aiResult.response,

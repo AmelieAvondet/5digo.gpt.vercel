@@ -81,7 +81,7 @@ export default function ChatPage() {
         if (form) form.reset();
 
         // Llamar a la Server Action
-        const result = await chatWithAI(selectedTopic, newMessage);
+        const result = await chatWithAI(newMessage, selectedTopic);
 
         if (result.error) {
             alert(result.error);

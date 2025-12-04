@@ -208,6 +208,3 @@ CUANDO NO USAR JSON:
     return { error: `Error interno: ${error.message}` };
   }
 }
-    return { error: error.message || "Error al procesar el mensaje.", response: undefined, fullContext: [] };
-  }
-}
