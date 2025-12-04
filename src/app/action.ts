@@ -5,18 +5,14 @@
 import * as bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase';
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
-import { SignJWT, jwtVerify } from 'jose';
+import { createJWT, setAuthCookie, clearAuthCookie, getUserFromToken } from '@/lib/auth';
 
 const SALT_ROUNDS = 10;
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-min-32-chars-long!!!'
-);
 
 export async function registerUser(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
-  const role = (formData.get("role") as string) || 'alumno';
+  const role = ((formData.get("role") as string) || 'alumno') as 'profesor' | 'alumno';
 
   if (!email || !password) {
     return { error: "Faltan email o contraseña." };
@@ -44,20 +40,10 @@ export async function registerUser(formData: FormData) {
     console.log(`[AUTH] Usuario registrado con ID: ${data.id}`);
 
     // 3. Crear JWT automáticamente después del registro
-    const token = await new SignJWT({ userId: data.id, email, role })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setExpirationTime('7d')
-      .sign(JWT_SECRET);
+    const token = await createJWT({ userId: data.id, email, role });
 
     // 4. Guardar JWT en cookie HTTP-Only
-    const cookieStore = await cookies();
-    cookieStore.set('auth_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60,
-      path: '/',
-    });
+    await setAuthCookie(token);
 
     console.log(`[AUTH] Registro exitoso y JWT creado para: ${email}`);
     return { success: true, userId: data.id, role };
@@ -102,20 +88,10 @@ export async function loginUser(formData: FormData) {
     }
 
     // 3. Crear JWT (como en registerUser)
-    const token = await new SignJWT({ userId: userData.id, email, role: userData.role })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setExpirationTime('7d')
-      .sign(JWT_SECRET);
+    const token = await createJWT({ userId: userData.id, email, role: userData.role });
 
     // 4. Guardar JWT en cookie HTTP-Only
-    const cookieStore = await cookies();
-    cookieStore.set('auth_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60,
-      path: '/',
-    });
+    await setAuthCookie(token);
 
     console.log(`[AUTH] Login exitoso para: ${email}`);
     return { success: true, userId: userData.id, role: userData.role };
@@ -129,8 +105,7 @@ export async function loginUser(formData: FormData) {
 export async function logoutUser() {
   try {
     console.log(`[AUTH] Logout solicitado`);
-    const cookieStore = await cookies();
-    cookieStore.delete('auth_token');
+    await clearAuthCookie();
     return { success: true };
   } catch (e: any) {
     console.error(`[AUTH] Error en logout:`, e.message);
@@ -140,17 +115,13 @@ export async function logoutUser() {
 
 export async function getCurrentUser() {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('auth_token')?.value;
+    const user = await getUserFromToken();
 
-    if (!token) {
+    if (!user) {
       return { user: null };
     }
 
-    const verified = await jwtVerify(token, JWT_SECRET);
-    const payload = verified.payload as { userId: string; email: string };
-    
-    return { user: { id: payload.userId, email: payload.email } };
+    return { user: { id: user.userId, email: user.email, role: user.role } };
   } catch (e: any) {
     console.error(`[AUTH] Error al verificar token:`, e.message);
     return { user: null };

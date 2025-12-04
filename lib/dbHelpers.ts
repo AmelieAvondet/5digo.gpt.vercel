@@ -217,6 +217,132 @@ export async function getPreviousTopicSummary(
 }
 
 /**
+ * Tipo para mensajes de chat
+ */
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp?: string;
+}
+
+/**
+ * Obtiene o crea una sesión de chat para el topic actual del curso
+ */
+export async function getOrCreateChatSession(
+  studentId: string,
+  topicId: string
+): Promise<{ sessionId: string; messages: ChatMessage[] } | null> {
+  try {
+    // Intentar obtener sesión existente
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('chat_sessions')
+      .select('id, context_data')
+      .eq('student_id', studentId)
+      .eq('topic_id', topicId)
+      .single();
+
+    if (!fetchError && existing) {
+      // Sesión existe
+      const messages = Array.isArray(existing.context_data)
+        ? existing.context_data
+        : [];
+      return {
+        sessionId: existing.id,
+        messages,
+      };
+    }
+
+    // Crear nueva sesión
+    const { data: newSession, error: insertError } = await supabaseAdmin
+      .from('chat_sessions')
+      .insert([{
+        student_id: studentId,
+        topic_id: topicId,
+        context_data: [],
+      }])
+      .select('id')
+      .single();
+
+    if (insertError || !newSession) {
+      console.error('[DB] Error creating chat session:', insertError);
+      return null;
+    }
+
+    return {
+      sessionId: newSession.id,
+      messages: [],
+    };
+  } catch (error) {
+    console.error('[DB] Exception in getOrCreateChatSession:', error);
+    return null;
+  }
+}
+
+/**
+ * Actualiza el historial de chat agregando nuevos mensajes
+ */
+export async function updateChatHistory(
+  studentId: string,
+  topicId: string,
+  newMessages: ChatMessage[]
+): Promise<boolean> {
+  try {
+    // Obtener sesión actual
+    const session = await getOrCreateChatSession(studentId, topicId);
+    if (!session) {
+      console.error('[DB] Could not get chat session');
+      return false;
+    }
+
+    // Agregar timestamps si no existen
+    const messagesWithTimestamp = newMessages.map(msg => ({
+      ...msg,
+      timestamp: msg.timestamp || new Date().toISOString(),
+    }));
+
+    // Combinar mensajes antiguos con nuevos
+    const updatedMessages = [...session.messages, ...messagesWithTimestamp];
+
+    // Actualizar en BD
+    const { error } = await supabaseAdmin
+      .from('chat_sessions')
+      .update({
+        context_data: updatedMessages,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('student_id', studentId)
+      .eq('topic_id', topicId);
+
+    if (error) {
+      console.error('[DB] Error updating chat history:', error);
+      return false;
+    }
+
+    console.log(`[DB] Chat history updated. Total messages: ${updatedMessages.length}`);
+    return true;
+  } catch (error) {
+    console.error('[DB] Exception in updateChatHistory:', error);
+    return false;
+  }
+}
+
+/**
+ * Obtiene todo el historial de mensajes para un topic
+ */
+export async function getChatMessages(
+  studentId: string,
+  topicId: string
+): Promise<ChatMessage[]> {
+  try {
+    const session = await getOrCreateChatSession(studentId, topicId);
+    return session?.messages || [];
+  } catch (error) {
+    console.error('[DB] Exception in getChatMessages:', error);
+    return [];
+  }
+}
+
+/**
  * Inicializa el Syllabus para un estudiante en un curso
  * Se llama cuando el estudiante se inscribe
  */

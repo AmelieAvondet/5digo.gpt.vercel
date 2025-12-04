@@ -5,8 +5,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { supabaseAdmin } from '@/lib/supabase';
-import { cookies } from 'next/headers';
-import { jwtVerify } from 'jose';
+import { getUserIdFromToken } from '@/lib/auth';
 import { TEACHER_PROMPT, fillPrompt } from '@/lib/prompts';
 import {
   extractTextResponse,
@@ -19,34 +18,29 @@ import {
   getStudentSyllabus,
   getPersonaConfig,
   updateSyllabusState,
+  getChatMessages,
+  updateChatHistory,
+  ChatMessage,
 } from '@/lib/dbHelpers';
 import { triggerNotaryAsync } from '@/lib/notaryAgent';
 
 // Inicializar cliente de Gemini
 const ai = new GoogleGenAI({});
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-min-32-chars-long!!!'
-);
-
 // ============ FUNCIONES AUXILIARES ============
 
 /**
- * Obtiene el userId del JWT de las cookies
+ * Obtiene el userId del JWT de las cookies (migrado a @/lib/auth)
+ * Esta función ahora delega a la función centralizada
  */
-async function getUserIdFromToken(): Promise<string | null> {
+async function getUserIdFromTokenInternal(): Promise<string | null> {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('auth_token')?.value;
-
-    if (!token) {
+    const userId = await getUserIdFromToken();
+    if (userId) {
+      console.log(`[CHAT] UserId extracted from JWT: ${userId}`);
+    } else {
       console.log(`[CHAT] No authentication token found`);
-      return null;
     }
-
-    const verified = await jwtVerify(token, JWT_SECRET);
-    const userId = (verified.payload as any).userId;
-    console.log(`[CHAT] UserId extracted from JWT: ${userId}`);
     return userId;
   } catch (error) {
     console.error(`[CHAT] Error extracting userId from JWT:`, error);
@@ -76,7 +70,7 @@ export async function handleStudentMessage(
     console.log(`[CHAT] Starting message handler: courseId=${courseId}`);
 
     // ===== PASO 1: Validar autenticación =====
-    const userId = await getUserIdFromToken();
+    const userId = await getUserIdFromTokenInternal();
     if (!userId) {
       return {
         error: "No estás autenticado. Por favor inicia sesión.",
@@ -103,22 +97,47 @@ export async function handleStudentMessage(
       `[CHAT] Syllabus loaded. Current topic: ${syllabus.current_topic_id}`
     );
 
+    // ===== PASO 2.5: Cargar historial de chat =====
+    const chatHistory = await getChatMessages(userId, syllabus.current_topic_id);
+    console.log(`[CHAT] Chat history loaded. Messages: ${chatHistory.length}`);
+
     // ===== PASO 3: Construir y ejecutar Agente Docente =====
-    const teacherPromptFilled = fillPrompt(TEACHER_PROMPT, {
-      PERSONA_JSON: JSON.stringify(personaConfig),
-      SYLLABUS_JSON: JSON.stringify(syllabus),
-      USER_INPUT: userMessage,
+    // Construir historial de conversación para Gemini
+    const conversationHistory = chatHistory.map((msg) => ({
+      role: msg.role === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.content }],
+    }));
+
+    // Agregar mensaje actual del usuario
+    conversationHistory.push({
+      role: 'user',
+      parts: [{ text: userMessage }],
     });
 
-    console.log(`[CHAT] Calling Teacher Agent...`);
+    // Construir prompt del sistema
+    const systemPrompt = fillPrompt(TEACHER_PROMPT, {
+      PERSONA_JSON: JSON.stringify(personaConfig),
+      SYLLABUS_JSON: JSON.stringify(syllabus),
+      USER_INPUT: '[Conversación en progreso - ver historial abajo]',
+    });
+
+    // Mensaje del sistema al inicio
+    const messagesForAI = [
+      {
+        role: 'user',
+        parts: [{ text: systemPrompt }],
+      },
+      {
+        role: 'model',
+        parts: [{ text: 'Entendido. Estoy listo para ayudar al estudiante con el tema actual del syllabus.' }],
+      },
+      ...conversationHistory,
+    ];
+
+    console.log(`[CHAT] Calling Teacher Agent with ${messagesForAI.length} messages...`);
     const aiRawResponse = await ai.models.generateContent({
       model: "gemini-2.0-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: teacherPromptFilled }],
-        },
-      ],
+      contents: messagesForAI,
     } as any);
 
     const responseText = aiRawResponse.text || "";
@@ -171,7 +190,31 @@ export async function handleStudentMessage(
       updateSuccess = await updateSyllabusState(userId, courseId, fallbackUpdate);
     }
 
-    // ===== PASO 6: RETORNAR RESPUESTA AL USUARIO (rápido) =====
+    // ===== PASO 6: GUARDAR HISTORIAL DE CHAT =====
+    const newMessages: ChatMessage[] = [
+      {
+        role: 'user',
+        content: userMessage,
+      },
+      {
+        role: 'assistant',
+        content: textToUser,
+      },
+    ];
+
+    const historySaved = await updateChatHistory(
+      userId,
+      syllabus.current_topic_id,
+      newMessages
+    );
+
+    if (!historySaved) {
+      console.warn(`[CHAT] Failed to save chat history`);
+    } else {
+      console.log(`[CHAT] ✓ Chat history saved`);
+    }
+
+    // ===== PASO 7: RETORNAR RESPUESTA AL USUARIO (rápido) =====
     console.log(`[CHAT] Returning response to user`);
     const response = {
       response: textToUser,
@@ -179,7 +222,7 @@ export async function handleStudentMessage(
       isNewSession: false,
     };
 
-    // ===== PASO 7: TRIGGER Agente Notario (asíncrono, "fire and forget") =====
+    // ===== PASO 8: TRIGGER Agente Notario (asíncrono, "fire and forget") =====
     if (
       stateUpdate.trigger_summary_generation === true &&
       stateUpdate.current_topic_id
@@ -214,7 +257,7 @@ export async function initializeChatSession(
   try {
     console.log(`[CHAT] Initializing chat session for course: ${courseId}`);
 
-    const userId = await getUserIdFromToken();
+    const userId = await getUserIdFromTokenInternal();
     if (!userId) {
       return {
         error: "No estás autenticado.",
@@ -267,6 +310,22 @@ export async function initializeChatSession(
     // Actualizar syllabus si es necesario
     if (stateUpdate && isValidStateUpdate(stateUpdate)) {
       await updateSyllabusState(userId, courseId, stateUpdate);
+    }
+
+    // Guardar mensaje inicial del tutor en el historial
+    const initialMessage: ChatMessage = {
+      role: 'assistant',
+      content: textToUser,
+    };
+
+    const historySaved = await updateChatHistory(
+      userId,
+      syllabus.current_topic_id,
+      [initialMessage]
+    );
+
+    if (!historySaved) {
+      console.warn(`[CHAT] Failed to save initial message`);
     }
 
     console.log(`[CHAT] Chat session initialized successfully`);

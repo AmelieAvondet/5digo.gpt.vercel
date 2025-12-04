@@ -41,16 +41,21 @@ URL: https://vercel.com
 → Environment Variables
 ```
 
-**Copia y pega estas variables:**
+**Copia y pega estas variables (REEMPLAZA CON TUS PROPIAS CREDENCIALES):**
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://aihjbewzxaoqwthuzoag.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpaGpiZXd6eGFvcXd0aHV6b2FnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDY5NzE5OSwiZXhwIjoyMDgwMjczMTk5fQ.zb4cvujc2UH0fzTMBjUtMaBquCDV7w9g-NNeyP4Qfog
-JWT_SECRET=31d7e27a137b9da6ffa8702baa0e965deea7bac62cc455fbc85b9d11bc650fd9
-GEMINI_API_KEY=AIzaSyD1U4bfSnAaAlraVBi0eF3t7_X_NLsni1Y
-OPENAI_API_KEY=AIzaSyD1U4bfSnAaAlraVBi0eF3t7_X_NLsni1Y
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+JWT_SECRET=your-jwt-secret-min-32-chars
+GEMINI_API_KEY=your-gemini-api-key
+OPENAI_API_KEY=your-openai-api-key
 NODE_ENV=production
 ```
+
+**⚠️ IMPORTANTE:** Obtén tus propias credenciales:
+- Supabase: https://app.supabase.com → Tu proyecto → Settings → API
+- Gemini API: https://aistudio.google.com/app/apikey
+- JWT Secret: Genera con `openssl rand -hex 32` en terminal
 
 (Presiona Enter/Save para cada una)
 

@@ -2,28 +2,11 @@
 "use server";
 
 import { supabaseAdmin } from '@/lib/supabase';
-import { cookies } from 'next/headers';
-import { jwtVerify } from 'jose';
+import { getUserIdFromToken } from '@/lib/auth';
+import { GoogleGenAI } from "@google/genai";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-min-32-chars-long!!!'
-);
-
-// Obtener userId del JWT
-async function getUserIdFromToken(): Promise<string | null> {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('auth_token')?.value;
-
-    if (!token) return null;
-
-    const verified = await jwtVerify(token, JWT_SECRET);
-    return (verified.payload as any).userId;
-  } catch (error) {
-    console.error('Error al extraer userId:', error);
-    return null;
-  }
-}
+// Inicializar cliente de Gemini
+const ai = new GoogleGenAI({});
 
 // ============ INSCRIPCIONES A CURSOS ============
 
@@ -397,8 +380,6 @@ export async function generateAIResponse(
   courseData?: any
 ) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-
     // Prompt ESTRICTO con protocolo de clase y JSON
     const systemPrompt = `Eres "Tutor IA", un asistente educativo experto, sumamente paciente y CRÍTICAMENTE ESTRICTO CON EL PROTOCOLO DE CLASE Y LA SALIDA JSON.
 
@@ -458,36 +439,23 @@ CUANDO NO USAR JSON:
       parts: [{ text: userMessage }],
     });
 
-    // Si no hay API key, retornar respuesta fallback
-    if (!apiKey) {
-      return {
-        success: true,
-        response: `Tutor IA: Hola, vamos a aprender sobre "${topicName}". \n\n${topicContent.substring(0, 250)}...\n\nAhora, responde: ¿Cuál es el punto clave que acabas de leer?`,
-        action: null,
-        provider: 'fallback',
-      };
-    }
+    let fullResponse = '';
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: {
+    try {
+      const aiResponse = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: [
+          {
+            role: "user",
             parts: [{ text: systemPrompt }],
           },
-          contents: messages,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1200,
-          },
-        }),
-      }
-    );
+          ...messages,
+        ],
+      } as any);
 
-    if (!response.ok) {
-      console.error('Gemini API error:', await response.text());
+      fullResponse = aiResponse.text || '';
+    } catch (error: any) {
+      console.error('Gemini API error:', error);
       return {
         success: true,
         response: `Tutor IA: Entiendo. Vamos paso a paso con "${topicName}".\n\n${topicContent.substring(0, 150)}...\n\n¿Qué parte necesitas que te explique con más detalle?`,
@@ -495,9 +463,6 @@ CUANDO NO USAR JSON:
         provider: 'fallback',
       };
     }
-
-    const data = await response.json();
-    const fullResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     if (!fullResponse) {
       return {

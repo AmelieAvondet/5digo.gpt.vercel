@@ -3,30 +3,7 @@
 "use server";
 
 import { supabaseAdmin } from '@/lib/supabase';
-import { cookies } from 'next/headers';
-import { jwtVerify } from 'jose';
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-min-32-chars-long!!!'
-);
-
-async function getUserIdFromToken(): Promise<string | null> {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('auth_token')?.value;
-
-    if (!token) {
-      return null;
-    }
-
-    const verified = await jwtVerify(token, JWT_SECRET);
-    const userId = (verified.payload as any).userId;
-    return userId;
-  } catch (error) {
-    console.error(`[CHAT] Error al extraer userId del JWT:`, error);
-    return null;
-  }
-}
+import { getUserIdFromToken } from '@/lib/auth';
 
 export async function loadAvailableTopics() {
   try {
