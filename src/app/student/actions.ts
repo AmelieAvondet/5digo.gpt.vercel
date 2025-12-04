@@ -73,6 +73,41 @@ export async function enrollInCourse(courseCode: string) {
       return { error: 'Error al inscribirse en el curso' };
     }
 
+    // ===== NUEVO: Inicializar Syllabus automáticamente =====
+    console.log(`[STUDENT] Initializing syllabus for student ${studentId} in course ${course.id}`);
+    
+    // Obtener todos los topics del curso
+    const { data: topics, error: topicsError } = await supabaseAdmin
+      .from('topics')
+      .select('id')
+      .eq('course_id', course.id)
+      .order('created_at', { ascending: true });
+
+    if (topicsError || !topics || topics.length === 0) {
+      console.warn('[STUDENT] No topics found for course, skipping syllabus initialization');
+      return { success: true, courseId: course.id, warning: 'Curso sin temas' };
+    }
+
+    // Crear entrada de Syllabus para cada topic
+    const syllabusEntries = topics.map((topic, index) => ({
+      student_id: studentId,
+      course_id: course.id,
+      topic_id: topic.id,
+      status: index === 0 ? 'in_progress' : 'pending',
+      order_index: index,
+    }));
+
+    const { error: syllabusError } = await supabaseAdmin
+      .from('student_syllabus')
+      .insert(syllabusEntries);
+
+    if (syllabusError) {
+      console.error('[STUDENT] Error initializing syllabus:', syllabusError);
+      // No retornar error - la inscripción fue exitosa, solo falla el syllabus
+    } else {
+      console.log(`[STUDENT] ✓ Syllabus initialized with ${topics.length} topics`);
+    }
+
     return { success: true, courseId: course.id };
   } catch (error) {
     console.error('Error en enrollInCourse:', error);

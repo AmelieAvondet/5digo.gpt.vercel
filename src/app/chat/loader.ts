@@ -1,4 +1,4 @@
-// Archivo: app/chat/actions.ts - Función para cargar contexto existente
+// Archivo: app/chat/loader.ts - Cargador de contexto de chat
 
 "use server";
 
@@ -28,48 +28,46 @@ async function getUserIdFromToken(): Promise<string | null> {
   }
 }
 
-export async function loadContextData(topicId: number) {
+export async function loadAvailableTopics() {
   try {
     const userId = await getUserIdFromToken();
     if (!userId) {
-      return { error: "No estás autenticado.", context: [] };
+      return { error: "No estás autenticado.", topics: [] };
     }
 
-    console.log(`[CHAT] Cargando contexto para userId=${userId}, topicId=${topicId}`);
+    // Obtener cursos en los que el estudiante está inscrito
+    const { data: enrollments, error: enrollError } = await supabaseAdmin
+      .from('course_enrollments')
+      .select('course_id')
+      .eq('student_id', userId);
 
-    const { data: session, error } = await supabaseAdmin
-      .from('chat_sessions')
-      .select('context_data')
-      .eq('user_id', userId)
-      .eq('topic_id', topicId)
-      .single();
-
-    if (error || !session) {
-      console.log(`[CHAT] No hay sesión previa`);
-      return { context: [] };
+    if (enrollError || !enrollments || enrollments.length === 0) {
+      console.log(`[CHAT] No courses found for student`);
+      return { topics: [] };
     }
 
-    console.log(`[CHAT] Contexto cargado: ${(session.context_data || []).length} mensajes`);
-    return { context: session.context_data || [] };
-  } catch (error: any) {
-    console.error(`[CHAT] Error al cargar contexto:`, error.message);
-    return { error: error.message, context: [] };
-  }
-}
+    const courseIds = enrollments.map(e => e.course_id);
 
-export async function loadAvailableTopics() {
-  try {
-    const { data: topics, error } = await supabaseAdmin
-      .from('topics')
-      .select('id, title')
+    // Obtener los cursos
+    const { data: courses, error: courseError } = await supabaseAdmin
+      .from('courses')
+      .select('id, name')
+      .in('id', courseIds)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error(`[CHAT] Error al cargar temas:`, error);
-      return { error: error.message, topics: [] };
+    if (courseError || !courses) {
+      return { error: courseError?.message || "Error al cargar cursos", topics: [] };
     }
 
-    return { topics: topics || [] };
+    // Transformar a formato de topics
+    const topics = courses.map((course: any) => ({
+      id: course.id,
+      title: course.name,
+      type: 'course',
+    }));
+
+    console.log(`[CHAT] Loaded ${topics.length} courses for student`);
+    return { topics };
   } catch (error: any) {
     console.error(`[CHAT] Error en loadAvailableTopics:`, error.message);
     return { error: error.message, topics: [] };

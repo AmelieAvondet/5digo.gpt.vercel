@@ -332,3 +332,208 @@ export async function importCourseFromJSON(courseData: any) {
   }
 }
 
+// ============ SYLLABUS Y ESTADO PEDAGÓGICO ============
+
+/**
+ * Inicializa el Syllabus para un estudiante en un curso
+ * Se llama cuando el estudiante se inscribe
+ */
+export async function initializeSyllabusForStudent(
+  studentId: string,
+  courseId: string
+) {
+  try {
+    console.log(`[ADMIN] Initializing syllabus for student ${studentId} in course ${courseId}`);
+
+    // Obtener todos los topics del curso
+    const { data: topics, error: topicsError } = await supabaseAdmin
+      .from('topics')
+      .select('id')
+      .eq('course_id', courseId)
+      .order('created_at', { ascending: true });
+
+    if (topicsError || !topics || topics.length === 0) {
+      console.error('[ADMIN] Error fetching course topics:', topicsError);
+      return { error: 'No se encontraron temas en el curso' };
+    }
+
+    // Crear entrada de Syllabus para cada topic
+    const syllabusEntries = topics.map((topic, index) => ({
+      student_id: studentId,
+      course_id: courseId,
+      topic_id: topic.id,
+      status: index === 0 ? 'in_progress' : 'pending',
+      order_index: index,
+    }));
+
+    const { error: insertError } = await supabaseAdmin
+      .from('student_syllabus')
+      .insert(syllabusEntries);
+
+    if (insertError) {
+      console.error('[ADMIN] Error initializing syllabus:', insertError);
+      return { error: 'Error al inicializar el plan de estudios' };
+    }
+
+    console.log(`[ADMIN] ✓ Syllabus initialized for student ${studentId}`);
+    return { success: true, topicsCount: topics.length };
+  } catch (error) {
+    console.error('[ADMIN] Exception in initializeSyllabusForStudent:', error);
+    return { error: 'Error al procesar la solicitud' };
+  }
+}
+
+/**
+ * Inicializa Syllabus para TODOS los estudiantes inscritos en un curso
+ * Útil cuando se crea un curso nuevo y ya hay estudiantes
+ */
+export async function initializeSyllabusForAllStudents(courseId: string) {
+  try {
+    const teacherId = await getUserIdFromToken();
+    if (!teacherId) {
+      return { error: 'No estás autenticado' };
+    }
+
+    // Verificar que el profesor es dueño del curso
+    const { data: course, error: courseError } = await supabaseAdmin
+      .from('courses')
+      .select('id')
+      .eq('id', courseId)
+      .eq('teacher_id', teacherId)
+      .single();
+
+    if (courseError || !course) {
+      return { error: 'No tienes permisos para este curso' };
+    }
+
+    console.log(`[ADMIN] Initializing syllabus for all students in course ${courseId}`);
+
+    // Obtener todos los estudiantes inscritos
+    const { data: enrollments, error: enrollError } = await supabaseAdmin
+      .from('course_enrollments')
+      .select('student_id')
+      .eq('course_id', courseId);
+
+    if (enrollError || !enrollments) {
+      console.error('[ADMIN] Error fetching enrollments:', enrollError);
+      return { error: 'Error al obtener inscritos' };
+    }
+
+    // Obtener todos los topics del curso
+    const { data: topics, error: topicsError } = await supabaseAdmin
+      .from('topics')
+      .select('id')
+      .eq('course_id', courseId)
+      .order('created_at', { ascending: true });
+
+    if (topicsError || !topics || topics.length === 0) {
+      return { error: 'No se encontraron temas en el curso' };
+    }
+
+    // Crear Syllabus para cada estudiante
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const enrollment of enrollments) {
+      const syllabusEntries = topics.map((topic, index) => ({
+        student_id: enrollment.student_id,
+        course_id: courseId,
+        topic_id: topic.id,
+        status: index === 0 ? 'in_progress' : 'pending',
+        order_index: index,
+      }));
+
+      const { error: insertError } = await supabaseAdmin
+        .from('student_syllabus')
+        .insert(syllabusEntries)
+        .select(); // Ignorar errores si ya existe
+
+      if (insertError) {
+        console.warn(`[ADMIN] Syllabus already exists for student ${enrollment.student_id}`);
+        failCount++;
+      } else {
+        successCount++;
+      }
+    }
+
+    console.log(
+      `[ADMIN] ✓ Syllabus initialization complete: ${successCount} succeeded, ${failCount} skipped`
+    );
+    return {
+      success: true,
+      successCount,
+      failCount,
+      totalStudents: enrollments.length,
+    };
+  } catch (error) {
+    console.error('[ADMIN] Exception in initializeSyllabusForAllStudents:', error);
+    return { error: 'Error al procesar la solicitud' };
+  }
+}
+
+/**
+ * Configura la Persona pedagógica de un curso
+ */
+export async function setPersonaForCourse(
+  courseId: string,
+  personaConfig: {
+    tone?: string;
+    explanation_style?: string;
+    language?: string;
+    difficulty_level?: string;
+  }
+) {
+  try {
+    const teacherId = await getUserIdFromToken();
+    if (!teacherId) {
+      return { error: 'No estás autenticado' };
+    }
+
+    // Verificar que el profesor es dueño del curso
+    const { data: course, error: courseError } = await supabaseAdmin
+      .from('courses')
+      .select('id')
+      .eq('id', courseId)
+      .eq('teacher_id', teacherId)
+      .single();
+
+    if (courseError || !course) {
+      return { error: 'No tienes permisos para este curso' };
+    }
+
+    console.log(`[ADMIN] Setting persona for course ${courseId}`, personaConfig);
+
+    // Verificar si ya existe
+    const { data: existing } = await supabaseAdmin
+      .from('persona_configs')
+      .select('id')
+      .eq('course_id', courseId)
+      .single();
+
+    let result;
+    if (existing) {
+      // Update
+      result = await supabaseAdmin
+        .from('persona_configs')
+        .update(personaConfig)
+        .eq('course_id', courseId);
+    } else {
+      // Insert
+      result = await supabaseAdmin
+        .from('persona_configs')
+        .insert([{ course_id: courseId, ...personaConfig }]);
+    }
+
+    if (result.error) {
+      console.error('[ADMIN] Error setting persona:', result.error);
+      return { error: 'Error al configurar la persona pedagógica' };
+    }
+
+    console.log(`[ADMIN] ✓ Persona set for course ${courseId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[ADMIN] Exception in setPersonaForCourse:', error);
+    return { error: 'Error al procesar la solicitud' };
+  }
+}
+

@@ -3,16 +3,15 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { chatWithAI } from './action';
-import { loadContextData, loadAvailableTopics } from './loader';
-import { useFormStatus } from 'react-dom'; // Para deshabilitar el botón
+import { chatWithAI, initializeChatSession } from './action';
+import { loadAvailableTopics } from './loader';
+import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { logoutUser } from '@/app/action';
 
 type Message = { role: 'user' | 'assistant'; content: string };
-type Topic = { id: number; title: string };
+type Course = { id: string; title: string; type: string };
 
-// Componente para el estado de carga del formulario
 function SubmitButton() {
     const { pending } = useFormStatus();
     return (
@@ -24,74 +23,92 @@ function SubmitButton() {
 
 export default function ChatPage() {
     const [messages, setMessages] = useState<Message[]>([]);
-    const [selectedTopic, setSelectedTopic] = useState<number>(1);
-    const [topics, setTopics] = useState<Topic[]>([]);
+    const [selectedCourse, setSelectedCourse] = useState<string>('');
+    const [courses, setCourses] = useState<Course[]>([]);
     const [loading, setLoading] = useState(true);
-    const [topicLoading, setTopicLoading] = useState(false);
+    const [courseLoading, setCourseLoading] = useState(false);
+    const [chatInitialized, setChatInitialized] = useState(false);
     const router = useRouter();
 
-    // Cargar temas disponibles al montar
+    // Cargar cursos disponibles al montar
     useEffect(() => {
-        loadTopics();
+        loadCourses();
     }, []);
 
-    // Cargar contexto cuando cambia el tema
+    // Inicializar chat cuando cambia el curso
     useEffect(() => {
-        loadContextForTopic(selectedTopic);
-    }, [selectedTopic]);
+        if (selectedCourse && !chatInitialized) {
+            initializeChat();
+        }
+    }, [selectedCourse, chatInitialized]);
 
-    const loadTopics = async () => {
+    const loadCourses = async () => {
         const result = await loadAvailableTopics();
-        if (result.topics.length > 0) {
-            setTopics(result.topics);
-            setSelectedTopic(result.topics[0].id);
-        } else {
-            // Temas por defecto
-            setTopics([
-                { id: 1, title: 'Fundamentos de Java' },
-                { id: 2, title: 'React Basics' },
-                { id: 3, title: 'TypeScript Intro' },
-            ]);
+        if (result.topics && result.topics.length > 0) {
+            setCourses(result.topics);
+            setSelectedCourse(result.topics[0].id);
         }
         setLoading(false);
     };
 
-    const loadContextForTopic = async (topicId: number) => {
-        setTopicLoading(true);
-        const result = await loadContextData(topicId);
-        if (result.context && result.context.length > 0) {
-            setMessages(result.context);
-        } else {
-            setMessages([]);
+    const initializeChat = async () => {
+        setCourseLoading(true);
+        try {
+            const result = await initializeChatSession(selectedCourse);
+            if (result.error) {
+                console.error('Error initializing chat:', result.error);
+                alert(result.error);
+            } else {
+                // Crear mensaje inicial del tutor
+                const assistantMessage: Message = {
+                    role: 'assistant',
+                    content: result.response,
+                };
+                setMessages([assistantMessage]);
+                setChatInitialized(true);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        } finally {
+            setCourseLoading(false);
         }
-        setTopicLoading(false);
     };
 
-    // Handler para enviar el formulario y el mensaje
+    const handleChangeCourse = (courseId: string) => {
+        setSelectedCourse(courseId);
+        setMessages([]);
+        setChatInitialized(false);
+    };
+
     const handleSubmit = async (formData: FormData) => {
         const newMessage = formData.get("message") as string;
         if (!newMessage.trim()) return;
 
-        // Mostrar el mensaje del usuario inmediatamente
         const userMessage: Message = { role: 'user', content: newMessage };
         setMessages(prev => [...prev, userMessage]);
 
-        // Limpiar input
         const form = document.querySelector('form') as HTMLFormElement;
         if (form) form.reset();
 
-        // Llamar a la Server Action
-        const result = await chatWithAI(newMessage, selectedTopic);
+        try {
+            const result = await chatWithAI(newMessage, selectedCourse);
 
-        if (result.error) {
-            alert(result.error);
-            // Remover el mensaje del usuario si falló
-            setMessages(prev => prev.slice(0, -1)); 
-            return;
+            if (result.error) {
+                alert(result.error);
+                setMessages(prev => prev.slice(0, -1));
+                return;
+            }
+
+            const assistantMessage: Message = {
+                role: 'assistant',
+                content: result.response,
+            };
+            setMessages(prev => [...prev, assistantMessage]);
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al enviar mensaje');
+            setMessages(prev => prev.slice(0, -1));
         }
-
-        // Añadir la respuesta de la IA
-        setMessages(result.fullContext || []);
     };
 
     const handleLogout = async () => {
@@ -109,10 +126,10 @@ export default function ChatPage() {
                 </div>
                 <div className="flex gap-4 items-center">
                     <a
-                        href="/admin/topics"
+                        href="/student"
                         className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors text-sm"
                     >
-                        Admin
+                        Mis Cursos
                     </a>
                     <button
                         onClick={handleLogout}
@@ -125,25 +142,27 @@ export default function ChatPage() {
 
             {/* Main Content */}
             <div className="flex flex-1 gap-4 p-4 overflow-hidden">
-                {/* Sidebar de temas */}
+                {/* Sidebar de cursos */}
                 <div className="w-64 bg-white rounded-lg shadow-md p-4 overflow-y-auto">
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Temarios</h2>
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Tus Cursos</h2>
                     {loading ? (
-                        <p className="text-gray-500 text-sm">Cargando temarios...</p>
+                        <p className="text-gray-500 text-sm">Cargando cursos...</p>
+                    ) : courses.length === 0 ? (
+                        <p className="text-gray-500 text-sm">No tienes cursos inscritos. <a href="/courses" className="text-blue-500">Inscríbete aquí</a></p>
                     ) : (
                         <div className="space-y-2">
-                            {topics.map((topic) => (
+                            {courses.map((course) => (
                                 <button
-                                    key={topic.id}
-                                    onClick={() => setSelectedTopic(topic.id)}
-                                    disabled={topicLoading}
-                                    className={`w-full text-left p-3 rounded-lg transition-colors disabled:opacity-50 ${
-                                        selectedTopic === topic.id
+                                    key={course.id}
+                                    onClick={() => handleChangeCourse(course.id)}
+                                    disabled={courseLoading}
+                                    className={`w-full text-left p-3 rounded-lg transition-colors disabled:opacity-50 text-sm ${
+                                        selectedCourse === course.id
                                             ? 'bg-blue-500 text-white'
                                             : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                                     }`}
                                 >
-                                    {topic.title}
+                                    {course.title}
                                 </button>
                             ))}
                         </div>
@@ -151,20 +170,21 @@ export default function ChatPage() {
                 </div>
 
                 {/* Chat Area */}
-                <div className="flex-1 flex flex-col max-w-4xl">
-                    <div className="flex-1 overflow-y-auto space-y-3 p-4 bg-white rounded-lg shadow-md mb-4">
-                        {topicLoading ? (
-                            <div className="h-full flex items-center justify-center">
-                                <p className="text-gray-400 text-lg">Cargando contexto...</p>
+                <div className="flex-1 bg-white rounded-lg shadow-md p-4 flex flex-col">
+                    {/* Messages */}
+                    <div className="flex-1 overflow-y-auto mb-4 space-y-4">
+                        {courseLoading ? (
+                            <div className="flex items-center justify-center h-full">
+                                <p className="text-gray-500">Inicializando chat...</p>
                             </div>
                         ) : messages.length === 0 ? (
-                            <div className="h-full flex items-center justify-center">
-                                <p className="text-gray-400 text-lg">Comienza a hacer preguntas sobre {topics.find(t => t.id === selectedTopic)?.title || 'este tema'}</p>
+                            <div className="flex items-center justify-center h-full">
+                                <p className="text-gray-500">Selecciona un curso para comenzar</p>
                             </div>
                         ) : (
-                            messages.map((msg, index) => (
+                            messages.map((msg, idx) => (
                                 <div
-                                    key={index}
+                                    key={idx}
                                     className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                                 >
                                     <div
@@ -180,18 +200,20 @@ export default function ChatPage() {
                             ))
                         )}
                     </div>
-                    
+
                     {/* Input Form */}
-                    <form action={handleSubmit} className="flex gap-2 bg-white p-4 rounded-lg shadow-md">
-                        <input
-                            name="message"
-                            type="text"
-                            placeholder="Pregunta sobre el tema..."
-                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            autoComplete="off"
-                        />
-                        <SubmitButton />
-                    </form>
+                    {selectedCourse && !courseLoading && (
+                        <form action={handleSubmit} className="flex gap-2">
+                            <input
+                                type="text"
+                                name="message"
+                                placeholder="Escribe tu pregunta..."
+                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                                disabled={courseLoading}
+                            />
+                            <SubmitButton />
+                        </form>
+                    )}
                 </div>
             </div>
         </div>
