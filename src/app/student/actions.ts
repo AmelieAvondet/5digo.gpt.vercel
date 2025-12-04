@@ -197,7 +197,35 @@ export async function getStudentCourseDetails(courseId: string) {
       return { error: 'Error al cargar los temarios' };
     }
 
-    const teacherEmail = Array.isArray((course as any).users) 
+    // Obtener el estado de cada topic desde student_syllabus
+    const { data: syllabusData, error: syllabusError } = await supabaseAdmin
+      .from('student_syllabus')
+      .select('topic_id, status')
+      .eq('student_id', studentId)
+      .eq('course_id', courseId);
+
+    if (syllabusError) {
+      console.error('[STUDENT] Error loading syllabus:', syllabusError);
+    }
+
+    // Crear mapa de estados por topic_id
+    const topicStatusMap = new Map<string, string>();
+    syllabusData?.forEach(item => {
+      topicStatusMap.set(item.topic_id, item.status);
+    });
+
+    // Calcular progreso real basado en topics completados
+    const totalTopics = topics?.length || 0;
+    const completedTopics = syllabusData?.filter(t => t.status === 'completed').length || 0;
+    const realProgress = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
+
+    // Agregar estado a cada topic
+    const topicsWithStatus = topics?.map(topic => ({
+      ...topic,
+      status: (topicStatusMap.get(topic.id) || 'pending') as 'pending' | 'in_progress' | 'completed',
+    })) || [];
+
+    const teacherEmail = Array.isArray((course as any).users)
       ? (course as any).users[0]?.email || 'Desconocido'
       : (course as any).users?.email || 'Desconocido';
 
@@ -211,8 +239,8 @@ export async function getStudentCourseDetails(courseId: string) {
         teacher: teacherEmail,
         created_at: course.created_at,
       },
-      topics: topics || [],
-      progress: enrollment.progress,
+      topics: topicsWithStatus,
+      progress: realProgress,
     };
   } catch (error) {
     console.error('Error en getStudentCourseDetails:', error);

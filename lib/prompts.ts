@@ -44,7 +44,13 @@ Otherwise, analyze the USER_INPUT against the current \`in_progress\` topic defi
    - Check if they asked for clarification but then understood
 2. **Determine Status:**
    - **IF NOT UNDERSTOOD / ONGOING:** Keep topic status as \`"in_progress"\`. Provide further explanation/examples/analogies.
-   - **IF UNDERSTOOD:** Change topic status to \`"completed"\`. Then identify the NEXT topic in the sequence and set it to \`"in_progress"\`.
+   - **IF UNDERSTOOD AND TOPIC COMPLETED:**
+     a. Mark current topic as \`"completed"\`
+     b. Find the NEXT topic in SYLLABUS_STATE.topics (by order_index + 1)
+     c. Mark that next topic as \`"in_progress"\`
+     d. Update current_topic_id to the next topic's ID
+     e. Set trigger_summary_generation to TRUE
+     f. CRITICAL: topics_updated MUST contain BOTH topics (completed + next in_progress)
 
 ## 3. OUTPUT ARCHITECTURE (STRICT FORMAT)
 You MUST generate output in this exact format, separated by the delimiter \`###STATE_UPDATE###\`.
@@ -74,7 +80,13 @@ Then output ONLY this JSON structure (minified, no markdown):
 3. Do NOT output any text after the JSON
 4. Copy topic_ids EXACTLY from the input SYLLABUS_STATE
 5. Set trigger_summary_generation to true ONLY when marking a topic as "completed"
-6. topics_updated must always have at least one entry (the current topic)
+6. When a topic is completed:
+   - topics_updated MUST have TWO entries: [completed_topic, next_topic]
+   - First entry: the just-completed topic with status="completed"
+   - Second entry: the next topic with status="in_progress"
+   - current_topic_id must be updated to the next topic's ID
+7. When continuing a topic (not completed):
+   - topics_updated has ONE entry: [current_topic] with status="in_progress"
 
 ---
 **EXAMPLE OUTPUT:**

@@ -13,6 +13,7 @@ interface Topic {
   content: string;
   activities?: string;
   created_at: string;
+  status?: 'pending' | 'in_progress' | 'completed';
 }
 
 interface CourseDetails {
@@ -151,47 +152,80 @@ export default function StudentCourseDetailsPage() {
             </p>
           ) : (
             <div className="space-y-4">
-              {topics.map((topic, index) => (
-                <Link
-                  key={topic.id}
-                  href={`/courses/${courseId}/topics/${topic.id}`}
-                  className="block border border-gray-200 rounded-lg p-4 hover:border-blue-400 hover:shadow-md transition"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                        <span className="inline-block bg-blue-100 text-blue-700 rounded-full w-8 h-8 text-center leading-8 text-sm font-bold mr-3">
-                          {index + 1}
-                        </span>
-                        {topic.name}
-                      </h3>
-                      <p className="text-gray-600 text-sm line-clamp-2">
-                        {topic.content}
+              {topics.map((topic, index) => {
+                const status = topic.status || 'pending';
+                const isCompleted = status === 'completed';
+                const isInProgress = status === 'in_progress';
+                const isPending = status === 'pending';
+
+                return (
+                  <Link
+                    key={topic.id}
+                    href={`/courses/${courseId}/topics/${topic.id}`}
+                    className={`block border-2 rounded-lg p-4 transition ${
+                      isCompleted
+                        ? 'border-green-300 bg-green-50 hover:border-green-400'
+                        : isInProgress
+                        ? 'border-blue-400 bg-blue-50 hover:border-blue-500 hover:shadow-md'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center">
+                          <span className={`inline-flex items-center justify-center rounded-full w-8 h-8 text-sm font-bold mr-3 ${
+                            isCompleted
+                              ? 'bg-green-500 text-white'
+                              : isInProgress
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-gray-200 text-gray-600'
+                          }`}>
+                            {isCompleted ? '✓' : index + 1}
+                          </span>
+                          {topic.name}
+                          {isInProgress && (
+                            <span className="ml-3 px-2 py-1 bg-blue-500 text-white text-xs rounded-full">
+                              En Progreso
+                            </span>
+                          )}
+                          {isCompleted && (
+                            <span className="ml-3 px-2 py-1 bg-green-500 text-white text-xs rounded-full">
+                              Completado
+                            </span>
+                          )}
+                        </h3>
+                        <p className={`text-sm line-clamp-2 ${
+                          isPending ? 'text-gray-500' : 'text-gray-700'
+                        }`}>
+                          {topic.content}
+                        </p>
+                      </div>
+                      <div className="text-right ml-4">
+                        <svg
+                          className={`w-5 h-5 ${
+                            isCompleted ? 'text-green-500' : isInProgress ? 'text-blue-500' : 'text-gray-400'
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                    {topic.activities && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        📝 Incluye actividades
                       </p>
-                    </div>
-                    <div className="text-right ml-4">
-                      <svg
-                        className="w-5 h-5 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
-                    </div>
-                  </div>
-                  {topic.activities && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      📝 Incluye actividades
-                    </p>
-                  )}
-                </Link>
-              ))}
+                    )}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>

@@ -159,7 +159,15 @@ export async function handleStudentMessage(
     const stateUpdate = extractStateJSON(responseText);
 
     console.log(`[CHAT] Text extracted: ${textToUser.substring(0, 100)}...`);
-    console.log(`[CHAT] State update extracted:`, stateUpdate);
+    console.log(`[CHAT] State update extracted:`, JSON.stringify(stateUpdate, null, 2));
+
+    // Debug adicional para troubleshooting
+    if (stateUpdate) {
+      console.log(`[CHAT] Topics updated count: ${stateUpdate.topics_updated?.length || 0}`);
+      stateUpdate.topics_updated?.forEach((topic: any, index: number) => {
+        console.log(`[CHAT]   Topic ${index + 1}: ${topic.topic_id} -> ${topic.status}`);
+      });
+    }
 
     // ===== PASO 5: Validar y actualizar Syllabus (síncrono) =====
     let updateSuccess = false;

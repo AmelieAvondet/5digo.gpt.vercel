@@ -91,8 +91,12 @@ export async function updateSyllabusState(
   stateUpdate: AIStateUpdate
 ): Promise<boolean> {
   try {
+    console.log(`[DB] Updating syllabus with ${stateUpdate.topics_updated.length} topic changes`);
+
     // Actualizar cada topic que cambió de estado
     for (const topicUpdate of stateUpdate.topics_updated) {
+      console.log(`[DB] Updating topic ${topicUpdate.topic_id} to status: ${topicUpdate.status}`);
+
       const { error } = await supabaseAdmin
         .from('student_syllabus')
         .update({ status: topicUpdate.status })
@@ -103,6 +107,53 @@ export async function updateSyllabusState(
       if (error) {
         console.error('[DB] Error updating topic status:', error);
         return false;
+      }
+    }
+
+    // FALLBACK AUTOMÁTICO: Si un topic se completó pero no hay un siguiente topic marcado como in_progress
+    const hasCompleted = stateUpdate.topics_updated.some(t => t.status === 'completed');
+    const hasNewInProgress = stateUpdate.topics_updated.filter(t => t.status === 'in_progress').length > 0;
+
+    if (hasCompleted && !hasNewInProgress) {
+      console.warn('[DB] ⚠️  Topic completed but no next topic marked as in_progress!');
+      console.log('[DB] Auto-fixing: Finding and activating next topic...');
+
+      // Obtener todos los topics del curso ordenados
+      const { data: allTopics, error: fetchError } = await supabaseAdmin
+        .from('student_syllabus')
+        .select('topic_id, order_index, status')
+        .eq('student_id', studentId)
+        .eq('course_id', courseId)
+        .order('order_index', { ascending: true });
+
+      if (!fetchError && allTopics) {
+        // Encontrar el topic completado
+        const completedTopicId = stateUpdate.topics_updated.find(t => t.status === 'completed')?.topic_id;
+        const completedTopic = allTopics.find(t => t.topic_id === completedTopicId);
+
+        if (completedTopic) {
+          // Buscar el siguiente topic por order_index
+          const nextTopic = allTopics.find(t => t.order_index === completedTopic.order_index + 1);
+
+          if (nextTopic) {
+            console.log(`[DB] Found next topic: ${nextTopic.topic_id}, activating...`);
+
+            const { error: activateError } = await supabaseAdmin
+              .from('student_syllabus')
+              .update({ status: 'in_progress' })
+              .eq('student_id', studentId)
+              .eq('course_id', courseId)
+              .eq('topic_id', nextTopic.topic_id);
+
+            if (activateError) {
+              console.error('[DB] Error auto-activating next topic:', activateError);
+            } else {
+              console.log('[DB] ✓ Auto-activated next topic successfully');
+            }
+          } else {
+            console.log('[DB] No more topics available - course completed!');
+          }
+        }
       }
     }
 

@@ -8,6 +8,7 @@ import { loadAvailableTopics } from './loader';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { logoutUser } from '@/app/action';
+import MarkdownMessage from '@/components/MarkdownMessage';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 type Course = { id: string; title: string; type: string };
@@ -188,13 +189,13 @@ export default function ChatPage() {
                                     className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                                 >
                                     <div
-                                        className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg ${
+                                        className={`max-w-md lg:max-w-3xl px-5 py-4 rounded-lg ${
                                             msg.role === 'user'
                                                 ? 'bg-blue-500 text-white rounded-br-none'
-                                                : 'bg-gray-200 text-gray-800 rounded-bl-none'
+                                                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-md'
                                         }`}
                                     >
-                                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                        <MarkdownMessage content={msg.content} isUser={msg.role === 'user'} />
                                     </div>
                                 </div>
                             ))
