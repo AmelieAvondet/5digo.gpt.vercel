@@ -177,28 +177,9 @@ export default function TopicChatPage() {
         backText="← Volver al Curso"
       />
 
-      <div className="flex-1 flex max-w-7xl w-full mx-auto gap-6 px-4 py-8 sm:px-6 lg:px-8">
-        {/* Content Panel */}
-        <div className="w-full md:w-1/3 bg-white rounded-lg shadow-md p-6 h-fit">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">📖 Contenido</h3>
-          <div className="prose prose-sm max-w-none">
-            <p className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
-              {topic.content}
-            </p>
-          </div>
-
-          {topic.activities && (
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h4 className="font-semibold text-blue-900 mb-2">📝 Actividades</h4>
-              <p className="text-blue-800 text-sm whitespace-pre-wrap">
-                {topic.activities}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Chat Panel */}
-        <div className="w-full md:w-2/3 flex flex-col bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="flex-1 flex max-w-7xl w-full mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        {/* Chat Panel - Full Width */}
+        <div className="w-full flex flex-col bg-white rounded-lg shadow-md overflow-hidden">
           {/* Status Bar */}
           {completionStatus !== 'in_progress' && (
             <div className={`px-6 py-3 text-sm font-medium text-white ${

@@ -180,8 +180,8 @@ export default function ChatPage() {
                 </div>
             </div>
 
-            {/* Chat Area - Casi pantalla completa */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 max-w-4xl mx-auto w-full">
+            {/* Chat Area - Pantalla completa */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 w-full">
                 {courseLoading ? (
                     <div className="flex items-center justify-center h-full">
                         <div className="text-center">
@@ -217,7 +217,7 @@ export default function ChatPage() {
                                 </div>
                             )}
                             <div
-                                className={`max-w-2xl px-5 py-3 rounded-lg ${
+                                className={`max-w-3xl px-5 py-3 rounded-lg ${
                                     msg.role === 'user'
                                         ? 'bg-blue-600 text-white rounded-br-none'
                                         : 'bg-white border border-gray-200 text-gray-900 rounded-bl-none shadow-sm'
@@ -239,7 +239,7 @@ export default function ChatPage() {
             {/* Input Form - Al final */}
             {selectedCourse && !courseLoading && (
                 <div className="bg-white border-t border-gray-200 p-4 shrink-0 shadow-lg">
-                    <form action={handleSubmit} className="max-w-4xl mx-auto flex gap-3">
+                    <form action={handleSubmit} className="w-full px-4 flex gap-3">
                         <Input
                             type="text"
                             name="message"
