@@ -48,7 +48,7 @@ export default function CoursesPage() {
   return (
     <div className="min-h-screen bg-gray-100">
       <AdminHeader
-        title="👨‍🏫 Mis Cursos"
+        title="Mis Cursos"
         rightAction={{
           label: '+ Crear Curso',
           href: '/admin/courses/new',

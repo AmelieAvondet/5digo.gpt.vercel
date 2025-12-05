@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- 2. Tabla de cursos (creados por profesores)
 CREATE TABLE IF NOT EXISTS courses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+<<<<<<< Updated upstream
   teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   description TEXT,
@@ -39,6 +40,12 @@ CREATE TABLE IF NOT EXISTS course_enrollments (
   student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   progress DECIMAL(5, 2) DEFAULT 0, -- Porcentaje de avance
+=======
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+  context_data JSONB DEFAULT '[]',
+  progress_data JSONB DEFAULT '{}',
+>>>>>>> Stashed changes
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(student_id, course_id)
@@ -48,13 +55,6 @@ CREATE TABLE IF NOT EXISTS course_enrollments (
 CREATE TABLE IF NOT EXISTS chat_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  topic_id UUID NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
-  context_data JSONB DEFAULT '[]', -- Historial de mensajes
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(student_id, topic_id)
-);
-
 -- 6. Tabla de configuración de persona pedagógica (estilo del docente)
 CREATE TABLE IF NOT EXISTS persona_configs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -107,3 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_student_syllabus_course_id ON student_syllabus(co
 CREATE INDEX IF NOT EXISTS idx_topic_summaries_student_id ON topic_summaries(student_id);
 CREATE INDEX IF NOT EXISTS idx_topic_summaries_topic_id ON topic_summaries(topic_id);
 
+ent_id);
+CREATE INDEX IF NOT EXISTS idx_enrollments_course_id ON course_enrollments(course_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_student_id ON chat_sessions(student_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_topic_id ON chat_sessions(topic_id);

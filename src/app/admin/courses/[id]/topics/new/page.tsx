@@ -54,7 +54,7 @@ export default function NewTopicPage() {
   return (
     <div className="min-h-screen bg-gray-100">
       <AdminHeader
-        title="📚 Crear Nuevo Temario"
+        title="Crear Nuevo Temario"
         backLink={`/admin/courses/${courseId}`}
         backText="← Volver"
       />

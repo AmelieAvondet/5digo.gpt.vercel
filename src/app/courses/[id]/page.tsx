@@ -144,7 +144,7 @@ export default function StudentCourseDetailsPage() {
 
         {/* Temarios Section */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">📚 Temarios del Curso</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Temarios del Curso</h2>
 
           {topics.length === 0 ? (
             <p className="text-gray-600 text-center py-8">

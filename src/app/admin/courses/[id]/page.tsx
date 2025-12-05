@@ -21,7 +21,7 @@ interface Enrollment {
   created_at?: string;
   users?: {
     email: string;
-  } | null;
+  }[];
 }
 
 export default function CourseDetailsPage() {
@@ -115,7 +115,7 @@ export default function CourseDetailsPage() {
         {/* Temarios Section */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">📚 Temarios</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Temarios</h2>
             <Link
               href={`/admin/courses/${courseId}/topics/new`}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
@@ -166,7 +166,7 @@ export default function CourseDetailsPage() {
 
         {/* Students Section */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">👨‍🎓 Alumnos Inscritos</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Alumnos Inscritos</h2>
 
           {enrollments.length === 0 ? (
             <p className="text-gray-600 text-center py-8">
@@ -180,10 +180,10 @@ export default function CourseDetailsPage() {
                   className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition"
                 >
                   <div className="mb-3">
-                    {enrollment.users?.email ? (
+                    {enrollment.users && enrollment.users.length > 0 && enrollment.users[0]?.email ? (
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-lg">👤</span>
-                        <span className="font-semibold text-gray-900 break-all">{enrollment.users.email}</span>
+                        <span className="font-semibold text-gray-900 break-all">{enrollment.users[0].email}</span>
                       </div>
                     ) : (
                       <span className="font-semibold text-gray-900">ID: {enrollment.student_id.slice(0, 8)}...</span>

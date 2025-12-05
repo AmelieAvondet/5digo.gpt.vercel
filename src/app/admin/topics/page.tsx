@@ -37,7 +37,7 @@ export default async function AdminTemariosPage() {
 
     return (
         <AdminLayout>
-            <h1 className="text-3xl font-bold mb-6">📚 Gestión de Temarios</h1>
+            <h1 className="text-3xl font-bold mb-6">Gestión de Temarios</h1>
             <button className="bg-blue-500 text-white p-2 rounded mb-4">
                 + Crear Nuevo Temario
             </button>
