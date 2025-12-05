@@ -4,8 +4,16 @@ import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase'; // Asegúrate de importar el cliente admin
 import AdminLayout from '@/components/AdminLayout'; // Crearemos esto para la navegación
 
+// Marcar como página dinámica (no estática)
+export const dynamic = 'force-dynamic';
+
 // Server Action para obtener y validar el rol
 async function getTemariosAndVerifyAuth() {
+    // Verificar que las variables estén configuradas
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error('Supabase variables not configured. Please set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
+    }
+
     // ⚠️ REEMPLAZAR con lógica de extracción de JWT y user ID real
     const DUMMY_USER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -16,7 +24,7 @@ async function getTemariosAndVerifyAuth() {
         .eq('id', DUMMY_USER_ID)
         .single();
     
-    if (userError || userData.role !== 'profesor') {
+    if (userError || userData?.role !== 'profesor') {
         redirect('/chat?error=NoAutorizado');
     }
 
