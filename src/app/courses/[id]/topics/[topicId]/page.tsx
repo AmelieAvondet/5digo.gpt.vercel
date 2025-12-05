@@ -22,6 +22,54 @@ interface ChatMessage {
   metadata?: any;
 }
 
+// Función para formatear contenido con bloques de código
+function formatMessageContent(content: string): string {
+  const escapeHtml = (text: string) =>
+    text.replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+  // Detectar y extraer bloques de código ANTES de escapar HTML
+  const codeBlocks: { placeholder: string; html: string }[] = [];
+  const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+
+  let tempContent = content.replace(codeBlockRegex, (match, language, code) => {
+    const lang = language || 'python';
+    const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+    const escapedCode = escapeHtml(code.trim());
+
+    codeBlocks.push({
+      placeholder,
+      html: `<div class="code-block-wrapper my-3 rounded-md overflow-hidden bg-gray-900 border border-gray-700">
+        <pre class="code-block p-4 overflow-x-auto m-0"><code class="language-${lang} text-sm font-mono leading-relaxed text-gray-100">${escapedCode}</code></pre>
+      </div>`
+    });
+
+    return placeholder;
+  });
+
+  // Ahora escapar el resto del contenido (sin los bloques de código)
+  let formatted = escapeHtml(tempContent);
+
+  // Restaurar los bloques de código
+  codeBlocks.forEach(({ placeholder, html }) => {
+    formatted = formatted.replace(placeholder, html);
+  });
+
+  // Convertir **bold**
+  formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>');
+
+  // Convertir bullet points
+  formatted = formatted.replace(/^•\s+(.+)$/gm, '<span class="ml-2 block">• $1</span>');
+
+  // Convertir emojis con mejor espaciado
+  formatted = formatted.replace(/(✅|💡|❌|🎯|⚠️|📝)/g, '<span class="inline-block mr-1">$1</span>');
+
+  return formatted;
+}
+
 // Función auxiliar para extraer acciones de la IA
 function extractActionFromAIResponse(actionData: any): { action: string; topicId?: string } | null {
   if (!actionData) return null;
@@ -212,13 +260,18 @@ export default function TopicChatPage() {
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg ${
+                    className={`max-w-xs lg:max-w-md xl:max-w-2xl px-4 py-3 rounded-lg ${
                       msg.role === 'user'
                         ? 'bg-blue-600 text-white rounded-br-none'
                         : 'bg-gray-200 text-gray-900 rounded-bl-none'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    <div
+                      className="text-sm whitespace-pre-wrap leading-relaxed"
+                      dangerouslySetInnerHTML={{
+                        __html: formatMessageContent(msg.content)
+                      }}
+                    />
                     {msg.timestamp && (
                       <p
                         className={`text-xs mt-1 ${
