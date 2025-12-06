@@ -58,7 +58,7 @@ export default function LoginPage() {
         <Card className="border-0 shadow-2xl bg-white">
           <CardHeader className="space-y-3 pb-6 text-center">
             <CardTitle className="text-3xl font-bold bg-linear-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">
-              Tutor Inteligente
+              TutorIA
             </CardTitle>
             <CardDescription className="text-base">Plataforma educativa con IA</CardDescription>
           </CardHeader>
