@@ -68,9 +68,6 @@ export default function RegisterPage() {
                 <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur">
                     <CardHeader className="space-y-2 pb-4">
                         <div className="flex items-center justify-center mb-2">
-                            <div className="w-12 h-12 bg-linear-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center">
-                                <span className="text-white text-xl font-bold">AI</span>
-                            </div>
                         </div>
                         <CardTitle className="text-2xl text-center">Crear Cuenta</CardTitle>
                         <CardDescription className="text-center">Únete a nuestra plataforma educativa</CardDescription>

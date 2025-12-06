@@ -82,7 +82,7 @@ export default function AdminHeader({
               className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition font-medium"
               title="Cerrar sesión"
             >
-               Salir
+              Salir
             </button>
           </div>
         </div>
