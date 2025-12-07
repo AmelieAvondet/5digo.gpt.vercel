@@ -415,39 +415,17 @@ export async function generateAIResponse(
   topicId?: string,
   courseData?: any
 ) {
-  try {
-    // Llamar a la API route del servidor
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        topicName,
-        topicContent,
-        userMessage,
-        chatHistory,
-        topicId,
-        courseData,
-      }),
-    });
+  // Importar dinámicamente para asegurar que se ejecute en el servidor
+  const { callGeminiChat } = await import('../../lib/gemini');
 
-    if (!response.ok) {
-      throw new Error('Error en la respuesta del servidor');
-    }
-
-    const data = await response.json();
-    return data;
-
-  } catch (error) {
-    console.error('Error en generateAIResponse:', error);
-    return {
-      success: true,
-      response: `Tutor IA: Disculpa, estoy procesando. Intenta de nuevo con tu pregunta.`,
-      action: null,
-      provider: 'fallback',
-    };
-  }
+  return await callGeminiChat(
+    topicName,
+    topicContent,
+    userMessage,
+    chatHistory,
+    topicId,
+    courseData
+  );
 }
 
 
