@@ -3,10 +3,6 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserIdFromToken } from '@/lib/auth';
-import { GoogleGenAI } from "@google/genai";
-
-// Inicializar cliente de Gemini
-const ai = new GoogleGenAI({});
 
 // ============ INSCRIPCIONES A CURSOS ============
 
@@ -420,121 +416,29 @@ export async function generateAIResponse(
   courseData?: any
 ) {
   try {
-    // Prompt ESTRICTO con protocolo de clase y JSON
-    const systemPrompt = `Eres "Tutor IA", un asistente educativo experto, sumamente paciente y CRÍTICAMENTE ESTRICTO CON EL PROTOCOLO DE CLASE Y LA SALIDA JSON.
-
-Tu objetivo fundamental es guiar al alumno paso a paso a través del Temario, asegurando la comprensión antes de avanzar.
-
-[ROL Y PERSONALIDAD IMPERATIVA]
-1. Modo de Operación: Estás en modo de Tutoría Dirigida.
-2. Tono: Profesional, motivador. Siempre responde en español.
-3. Prioridad Máxima: Las reglas de Clase y Evaluación tienen prioridad sobre cualquier pregunta que no esté relacionada con el subtema actual.
-
-[TEMA ACTUAL]
-Nombre: "${topicName}"
-ID: "${topicId || 'current'}"
-Contenido:
-${topicContent}
-
-[REGLAS DE CLASE Y CONVERSACIÓN ESTRICTAS]
-1. INICIO DE TEMA (Clase): Si es la primera interacción o el alumno no ha completado el subtema, INICIA con una Explicación Detallada del tema, seguida de un ejemplo práctico.
-2. EVALUACIÓN (Tarea): Inmediatamente después de la explicación, genera UNA TAREA con 2-3 preguntas o ejercicios para evaluar comprensión.
-3. RECONDUCCIÓN (Anti-Q&A): Si el alumno hace una pregunta que NO es la tarea actual, IGNORA la pregunta directa. Responde recordándole la Tarea Pendiente o el concepto actual. NO AVANCES hasta que evalúes la tarea.
-4. VALIDACIÓN: Si el alumno responde la tarea correctamente, celebra el logro y marca como completado. Si responde incorrectamente, proporciona retroalimentación constructiva y pide que lo intente de nuevo.
-
-[FORMATO ESTRICTO DE RESPUESTA]
-- Tu respuesta DEBE tener DOS partes: 
-  1. TEXTO EDUCATIVO (200-400 palabras máximo)
-  2. JSON DE ACCIÓN (al final, sin triple comillas ni markdown)
-
-[PROTOCOLO DE JSON DE ACCIÓN]
-El JSON DEBE ser el ÚLTIMO elemento de tu respuesta. Estructura exacta:
-
-{"action": "update_progress", "subtopic_id": "${topicId || 'current'}", "status": "COMPLETADO"}
-
-USAR SOLO cuando:
-- El alumno responde correctamente la tarea
-- El alumno demuestra comprensión del tema
-
-CUANDO NO USAR JSON:
-- En explicaciones iniciales
-- Cuando generas la tarea
-- Cuando el alumno responde incorrectamente
-- Cuando haces reconducción
-
-[RESPONSABILIDAD MÁXIMA]
-- Eres responsable de la calidad educativa
-- NO saltees etapas del aprendizaje
-- Verifica comprensión antes de avanzar
-- El JSON de acción es sagrado: solo úsalo cuando sea REALMENTE merecido`;
-
-    // Construir mensajes para Gemini
-    const messages = chatHistory.map((msg: any) => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }],
-    }));
-
-    messages.push({
-      role: 'user',
-      parts: [{ text: userMessage }],
+    // Llamar a la API route del servidor
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        topicName,
+        topicContent,
+        userMessage,
+        chatHistory,
+        topicId,
+        courseData,
+      }),
     });
 
-    let fullResponse = '';
-
-    try {
-      const aiResponse = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: systemPrompt }],
-          },
-          ...messages,
-        ],
-      } as any);
-
-      fullResponse = aiResponse.text || '';
-    } catch (error: any) {
-      console.error('Gemini API error:', error);
-      return {
-        success: true,
-        response: `Tutor IA: Entiendo. Vamos paso a paso con "${topicName}".\n\n${topicContent.substring(0, 150)}...\n\n¿Qué parte necesitas que te explique con más detalle?`,
-        action: null,
-        provider: 'fallback',
-      };
+    if (!response.ok) {
+      throw new Error('Error en la respuesta del servidor');
     }
 
-    if (!fullResponse) {
-      return {
-        success: true,
-        response: `Tutor IA: Estoy aquí para enseñarte "${topicName}". Cuéntame qué quieres aprender.`,
-        action: null,
-        provider: 'fallback',
-      };
-    }
+    const data = await response.json();
+    return data;
 
-    // Extraer texto y JSON de la respuesta
-    let textResponse = fullResponse;
-    let actionData = null;
-
-    // Buscar JSON al final
-    const jsonMatch = fullResponse.match(/\{[\s\S]*?"action"[\s\S]*?\}/);
-    if (jsonMatch) {
-      try {
-        actionData = JSON.parse(jsonMatch[0]);
-        // Remover el JSON del texto visible
-        textResponse = fullResponse.replace(jsonMatch[0], '').trim();
-      } catch (e) {
-        console.error('Error parsing JSON:', e);
-      }
-    }
-
-    return {
-      success: true,
-      response: textResponse,
-      action: actionData,
-      provider: 'gemini',
-    };
   } catch (error) {
     console.error('Error en generateAIResponse:', error);
     return {
