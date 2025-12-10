@@ -1,7 +1,16 @@
 // src/lib/gemini.ts
+// ⚠️ IMPORTANTE: Este archivo SOLO se ejecuta en el servidor (Server Actions)
+// La API key de Gemini NUNCA debe exponerse al cliente
+'use server';
+
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// Verificar que la API key esté configurada
+if (!process.env.GEMINI_API_KEY) {
+  console.error('❌ GEMINI_API_KEY no está configurada. Las funciones de IA no funcionarán.');
+}
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'placeholder_key');
 
 export async function callGeminiChat(
   topicName: string,

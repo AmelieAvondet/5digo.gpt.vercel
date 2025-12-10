@@ -3,7 +3,7 @@
 
 "use server";
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserIdFromToken } from '@/lib/auth';
 import { TEACHER_PROMPT, fillPrompt } from '@/lib/prompts';
@@ -24,8 +24,14 @@ import {
 } from '@/lib/dbHelpers';
 import { triggerNotaryAsync } from '@/lib/notaryAgent';
 
-// Inicializar cliente de Gemini
-const ai = new GoogleGenAI({});
+// ⚠️ Verificar que GEMINI_API_KEY está configurada (solo en servidor)
+if (!process.env.GEMINI_API_KEY) {
+  console.error('❌ GEMINI_API_KEY not configured. AI features will not work.');
+}
+
+// Inicializar cliente de Gemini de forma segura (solo en servidor)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'placeholder_key');
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
 // ============ FUNCIONES AUXILIARES ============
 
@@ -135,12 +141,11 @@ export async function handleStudentMessage(
     ];
 
     console.log(`[CHAT] Calling Teacher Agent with ${messagesForAI.length} messages...`);
-    const aiRawResponse = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+    const aiRawResponse = await model.generateContent({
       contents: messagesForAI,
-    } as any);
+    });
 
-    const responseText = aiRawResponse.text || "";
+    const responseText = aiRawResponse.response.text();
 
     if (!responseText) {
       return {
@@ -292,17 +297,16 @@ export async function initializeChatSession(
       USER_INPUT: "[SISTEMA: Esta es la primera interacción. Por favor, introduce el tema actual de forma amigable y motivadora. No esperes a que el estudiante pregunte.]",
     });
 
-    const aiRawResponse = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+    const aiRawResponse = await model.generateContent({
       contents: [
         {
           role: "user",
           parts: [{ text: teacherPromptFilled }],
         },
       ],
-    } as any);
+    });
 
-    const responseText = aiRawResponse.text || "";
+    const responseText = aiRawResponse.response.text();
 
     if (!responseText) {
       return {
